@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="eu">
+<head>
+<meta charset="utf-8">
+<title>Gidoia — Ingurune inmersiboetarako prozesuaren proposamena</title>
+<style>
+  body { font-family: Arial, Helvetica, sans-serif; line-height: 1.5; color: #1a1a1a; max-width: 920px; margin: 24px auto; padding: 0 16px; }
+  h1 { font-size: 1.55em; border-bottom: 2px solid #1f4e79; padding-bottom: 6px; }
+  h2 { font-size: 1.2em; color: #1f4e79; margin-top: 28px; border-bottom: 1px solid #cfd8e3; padding-bottom: 4px; }
+  h3 { font-size: 1.02em; color: #2e5f8a; margin-top: 18px; }
+  table { border-collapse: collapse; width: 100%; margin: 12px 0; font-size: 0.9em; }
+  th, td { border: 1px solid #9aa7b4; padding: 6px 8px; vertical-align: top; text-align: left; }
+  th { background: #e8eef5; }
+  .ohar { background: #f4f7fa; border-left: 4px solid #1f4e79; padding: 10px 14px; margin: 14px 0; }
+  .txiki { font-size: 0.85em; color: #444; }
+  ul, ol { padding-left: 22px; }
+  code { background: #eef1f4; padding: 1px 4px; font-size: 0.88em; }
+  .flow { text-align: center; font-weight: bold; }
+</style>
+</head>
+<body>
+
+<h1>Ingurune inmersiboetarako prozesu bat proposatu — GIDOIA</h1>
+<p class="txiki">“Zero-downtime” erronka: web aplikazio baten hedapena eta gorabehera baten kudeaketa · Jon Rubio · CIFP Usurbil LHII · CC BY-NC-SA 4.0</p>
+
+<h2>1. Zikloaren izena</h2>
+<p><strong>Garapeneko aplikazioen goi-mailako teknikaria (DAM / DAW)</strong>, 2. maila.</p>
+<p>Modulu inplikatuak: <em>Zerbitzariaren programazioa</em> eta <em>Web aplikazioen hedapena</em> (DAW) / <em>Enpresarako irtenbideen programazioa</em> (DAM).</p>
+
+<h2>2. Testuinguru inmersibo batera eramango nukeen prozesua, laburki</h2>
+<p><strong>“Uhin Apps”</strong> enpresa fiktizioko garatzaile-taldearen papera hartuta, ikasleek web aplikazio baten bertsio berria <strong>produkzio-zerbitzarira hedatu</strong> behar dute zerbitzua eten gabe (<em>zero-downtime</em>), eta, hedapenaren ondoren, ustekabeko <strong>gorabehera bat</strong> (502 errorea eta TLS ziurtagiri baten iraungipena) diagnostikatu, arindu eta dokumentatu behar dute.</p>
+<p>Prozesuak zortzi urrats ditu, eta ikasleak osorik biziko ditu datu-zentro birtual batean: NOC aretoa, rack korridorea, staging gela eta bezeroaren bulegoa.</p>
+<ol>
+  <li><strong>Prestaketa:</strong> bertsioaren build-a, staging probak eta onarpen-irizpideak.</li>
+  <li><strong>Konfigurazioa:</strong> ingurune-aldagaiak, sekretuak eta atzera-egite plana.</li>
+  <li><strong>Datu-basearen migrazioa:</strong> babeskopia, migrazio-scripta eta egiaztapena.</li>
+  <li><strong>Hedapena:</strong> argitaratzea, berrabiarazte kontrolatua eta karga-balantzearen txanda.</li>
+  <li><strong>Egiaztapena:</strong> <code>health check</code>ak, smoke testak eta errendimendu-neurketak.</li>
+  <li><strong>Bezeroaren onespena:</strong> funtzio kritikoak erabiltzailearen ikuspegitik egiaztatzea.</li>
+  <li><strong>Gorabehera:</strong> 502 errorearen eta ziurtagiriaren diagnostikoa (logak, panelak, trafikoa).</li>
+  <li><strong>Itxiera:</strong> rollback-a edo konponketa, post-mortema eta prebentzio-neurriak.</li>
+</ol>
+
+<h2>3. Ikaskuntza helburuak</h2>
+<h3>3.a. Garatu nahi diren gaitasunak</h3>
+<ul>
+  <li><strong>Gaitasun teknikoa:</strong> hedapen bat planifikatzea eta exekutatzea, aurrebaldintzak, migrazioa eta atzera-egite plana barne.</li>
+  <li><strong>Konfigurazio seguruaren kudeaketa:</strong> ingurune-aldagaiak eta sekretuak bereiztea eta modu seguruan erabiltzea.</li>
+  <li><strong>Zerbitzuaren jarraitutasuna:</strong> karga-balantzea eta berrabiarazte kontrolatuak erabiliz zerbitzua eten gabe mantentzea.</li>
+  <li><strong>Diagnostiko gaitasuna:</strong> logak, metrikak eta erabiltzailearen sintomak erlazionatuz gorabehera baten arrazoia identifikatzea.</li>
+  <li><strong>Erantzun gaitasuna:</strong> presiopean erabakiak hartzea (rollback ala hotfix) eta ondorioak justifikatzea.</li>
+  <li><strong>Komunikazio eta dokumentazio gaitasuna:</strong> intzidentzia-txostena eta post-mortema idaztea, hizkuntza argian.</li>
+  <li><strong>Gaitasun digitala eta segurtasunekoa:</strong> datu pertsonalen eta kredentzialen tratamendua, pribatutasun-irizpideak aplikatuz.</li>
+  <li><strong>Gaitasun soziala:</strong> rolen banaketa, talde-erabakiak eta feedback-eraikitzailea.</li>
+</ul>
+
+<h2>4. Prozesu hau ingurune inmersiboetara eramatearen abantailak</h2>
+<h3>4.a. Zein mugari loturiko prozesua den eta zergatik</h3>
+<p>Prozesua batez ere <strong>ikusgarritasun-mugei</strong> eta <strong>segurtasun-mugei</strong> lotuta dago, eta horiek errepikagarritasun eta espazio/denbora mugekin indartzen dira:</p>
+<table>
+  <tr><th style="width:24%">Muga</th><th>Gure prozesuan nola agertzen den</th></tr>
+  <tr>
+    <td><strong>Ikusgarritasuna (nagusia)</strong></td>
+    <td>Trafikoa, logak eta zerbitzarien arteko komunikazioa ikusezinak dira. Hedapena segundo batzuetan gertatzen da eta DNSaren propagazioak 24–48 h behar ditu; ziurtagiria 90 egunean behin iraungitzen da. Datu-zentroa erraldoia da ikusteko, eta logak, berriz, txikiegiak. Prozesuak angelu anitz behar ditu aldi berean: rackaren aurreko eta atzeko aldea, monitorizazio-panela eta erabiltzailearen pantaila.</td>
+  </tr>
+  <tr>
+    <td><strong>Segurtasuna</strong></td>
+    <td>Ikasle hasiberriek produkzioan egindako akatsek benetako zerbitzu-etena, datu-galeta eta pribatutasun-arazoak sor ditzakete. Kredentzial errealak erabiltzea arriskutsua da, eta gorabeherak ez dira nahi dugunean probokatzen.</td>
+  </tr>
+  <tr>
+    <td><strong>Errepikagarritasuna</strong></td>
+    <td>Hodeiko instantziek, domeinuek eta ziurtagiriek kostua dute; ingurune bakoitza muntatzeko orduak behar dira, kontsumigarriak (API gakoak, kuotak) lortzea zaila da, eta saio bakoitzak baliabide-hondakinak uzten ditu.</td>
+  </tr>
+  <tr>
+    <td><strong>Ekipamendua</strong></td>
+    <td>Ez daukagu rackik, karga-balantzatzaile fisikorik, hardware suebakirik ezta produkzio-zerbitzaririk; gainera, erabiltzean higatu egiten dira.</td>
+  </tr>
+  <tr>
+    <td><strong>Espazioa eta denbora</strong></td>
+    <td>Datu-zentro batera bisita egitea zaila da (sarbide mugatua), eta gorabeherak normalean gauez edo ordutegitik kanpo gertatzen dira.</td>
+  </tr>
+</table>
+
+<h3>4.b. Zer ekarpen egiten duen era tradizionalean lantzearekin alderaturik</h3>
+<table>
+  <tr><th style="width:26%">Era tradizionala (diapositiba, bideoa, tutoriala, Packet Tracer)</th><th style="width:26%">Ingurune inmersiboa</th><th>Ekarpena</th></tr>
+  <tr>
+    <td>Prozesua pausoz pauso kontatzen da; ikaslea behatzaile pasiboa da.</td>
+    <td>Ikasleak berak egiten du hedapena eta erabakiak hartzen ditu.</td>
+    <td>Ezagutza prozedurazkora eta erabaki-gaitasenera igarotzen da.</td>
+  </tr>
+  <tr>
+    <td>Huts egitea arriskutsua edo ezinezkoa da; “ondo ateratzen da beti”.</td>
+    <td><em>Safe-to-fail</em>: akatsak errepika daitezke ondoriorik gabe, eta rollback-a benetan probatzen da.</td>
+    <td>Hutsegitea ikaskuntza bihurtzen da, eta segurtasuna bermatzen da.</td>
+  </tr>
+  <tr>
+    <td>Errepikapena kostua du edo ez da posible.</td>
+    <td>Eszena eta gidoia behar adina aldiz errepika daitezke, aldaerak sartuz.</td>
+    <td>Praktika masiboa, kostu marjinalik gabe eta hondakinik sortu gabe.</td>
+  </tr>
+  <tr>
+    <td>Trafikoa eta logak ez dira ikusten; denbora-eskalak ezkutuan geratzen dira.</td>
+    <td>“X izpien” ikuspegia: trafikoa, logak eta paketeak bistaratzen dira; denbora azeleratu edo gelditu daiteke.</td>
+    <td>Kontzeptu abstraktuak (zero-downtime, karga-balantzea, SLA) esperientziaz ulertzen dira.</td>
+  </tr>
+  <tr>
+    <td>Testuingurua artifiziala da (fitxategi solteak, pantaila bakarra).</td>
+    <td>Testuinguru osoa: NOC, racka, staging eta bezeroa espazio berean.</td>
+    <td>Transferentzia handiagoa praktiketako lan-errealitatera, eta motibazio handiagoa.</td>
+  </tr>
+</table>
+
+<h2>5. Proposamenaren diseinua</h2>
+<p><strong>Prototipo interaktiboa:</strong> prozesuaren lehen bertsioa (ticket-a → tokena → komandoak → hedapena → gorabehera → post-mortema) nabigatzailean eta VR betaurrekoetan (WebXR) erabiltzeko: <a href="vr/index.html">▶ Ireki Uhin Apps datu-zentroa (Three.js · WebXR)</a>. 3D elementuak prozeduraz sortuak dira; ez dago kanpoko aktiborik.</p>
+
+<h3>5.a. Lanerako esparrua</h3>
+<p><strong>Espazioa:</strong> “Uhin Apps DC-1” datu-zentro birtuala, 360° eszena interaktiboa, lau gune eta pasabide batekin.</p>
+<p><strong>Ingurune inmersiboko elementu finkoak:</strong></p>
+<table>
+  <tr><th style="width:22%">Gunea</th><th style="width:46%">Elementu finkoak (makinak, tresneria, altzariak)</th><th>Detaileak</th></tr>
+  <tr>
+    <td>Sarrera eta gela teknikoa</td>
+    <td>Mahai operatiboa, 6 aulki ergonomiko, dokumentazio-armairua, sarbide-kontrol irakurgailua, segurtasun-kartela.</td>
+    <td>Mahaiak 160 × 80 cm; armairua 200 × 90 × 45 cm; sarbide-iragailua atearen alboan.</td>
+  </tr>
+  <tr>
+    <td>NOC aretoa</td>
+    <td>Bideo-horma 4 × 2 panelekin (8 pantaila), operadore-mahai luzea, 4 aulki, telefonoa, inprimagailua, erloju analogikoa.</td>
+    <td>Bideo-horma 3,2 × 1,8 m; mahai luzea 240 × 90 cm; panel bakoitza 55”.</td>
+  </tr>
+  <tr>
+    <td>Rack korridorea</td>
+    <td>3 rack (R1 aplikazioa, R2 datu-basea, R3 sare/segurtasuna), karga-balantzatzaile fisikoa, patch panela, UPSa, tenperatura-sentsoreak, CO2 itzalgailua, sabaiko LED argiak.</td>
+    <td>Rack bakoitza 600 × 1.000 × 42U; zerbitzariak 1U/2U; korridorea 1,6 m zabal.</td>
+  </tr>
+  <tr>
+    <td>Staging gela</td>
+    <td>2 mahai, 2 ordenagailu, etiketa-inprimagailua, USB tokenen kutxa, arbela.</td>
+    <td>Mahaiak 120 × 70 cm; ordenagailuak 24” pantailarekin.</td>
+  </tr>
+  <tr>
+    <td>Bezeroaren bulegoa</td>
+    <td>Mahai bat, aulkia, telefonoa, erabiltzailearen aplikazioa erakusten duen pantaila.</td>
+    <td>Leiho birtual batetik ikusten da, NOC-etik gertu.</td>
+  </tr>
+</table>
+
+<p><strong>Interakziorako elementu nagusiak:</strong></p>
+<ul>
+  <li>NOC-eko bideo-horma eta alerta-panelak (trafikoa, errore-tasa, logak, SLA).</li>
+  <li>Rack-aren ateak, patch panela eta karga-balantzatzailearen kontsola.</li>
+  <li>Staging-eko terminala eta build-panela.</li>
+  <li>Ticket tableta eta TLS ziurtagiriaren karpeta.</li>
+  <li>Bezeroaren pantaila eta komunikazio-kanala.</li>
+</ul>
+
+<p><strong>Inguruneko baldintza ezinbestekoak:</strong></p>
+<ul>
+  <li><strong>Argiztapena:</strong> NOC aretoan argi urdina eta giro iluna (≈ 300 lux) panelak irakurtzeko; rack korridorean LED argi zuria (≈ 500 lux) etiketak eta kableak bereizteko.</li>
+  <li><strong>Ingurumen-baldintzak:</strong> tenperatura 18–27 °C artean eta zarata etengabea (≈ 60 dB) errealismoa emateko; tenperatura 27 °C-tik gora igotzen bada, alerta bat aktibatzen da (errealismoa eta tentsioa).</li>
+  <li><strong>Sarea:</strong> eszena linean edo deskargatuta; 2D modu baliokidea baldintza guztiak betetzen ez badira.</li>
+  <li><strong>Segurtasun-arauak:</strong> ezin da rack-aren atea indarrez ireki, ezta martxan dagoen kable bat kendu; arau-urratzeak feedback bisuala eta testuala sortzen du.</li>
+</ul>
+
+<h3>5.b. Objektu interaktiboak</h3>
+<table>
+  <tr>
+    <th style="width:17%">Objektua</th>
+    <th style="width:12%">Tamaina</th>
+    <th style="width:10%">Pisua</th>
+    <th style="width:14%">Materiala</th>
+    <th style="width:20%">Ezaugarri dinamikoak</th>
+    <th>Interakzioak</th>
+  </tr>
+  <tr>
+    <td>Zerbitzari-bladea (aplikazio-nodoa)</td>
+    <td>44,5 × 75 × 4,4 cm (1U)</td>
+    <td>12 kg</td>
+    <td>Altzairua eta aluminioa</td>
+    <td>Beroa sortzen du; LEDak piztu/itzaltzen dira; hauskorra da torlojuak behar bezala jarri ezean.</td>
+    <td>Heldu, rack-ean sartu, torlojatu, piztu, egoera-LEDa irakurri.</td>
+  </tr>
+  <tr>
+    <td>SSD diskoa (hot-swap)</td>
+    <td>7 × 10 × 0,7 cm</td>
+    <td>80 g</td>
+    <td>Metal eta plastikoa</td>
+    <td>Beroa; txertatzean klik bat entzuten da; okertuta sartzen bada, errorea.</td>
+    <td>Heldu, askatu, txertatu, kendu, LEDa begiratu.</td>
+  </tr>
+  <tr>
+    <td>RJ45 kablea</td>
+    <td>2 m</td>
+    <td>60 g</td>
+    <td>Kobrea eta PVCa</td>
+    <td>Malgua; konektorea hauts daiteke; etiketa falta bada, nahastea sortzen du.</td>
+    <td>Heldu, konektatu, askatu, etiketatu.</td>
+  </tr>
+  <tr>
+    <td>Zuntz optikoaren patch kablea</td>
+    <td>3 m</td>
+    <td>30 g</td>
+    <td>Beira eta estaldura</td>
+    <td>Oso hauskorra; tolestuz gero, galera; konektorea hautsez zikintzen da.</td>
+    <td>Bi eskuekin heldu, LC konektorea txertatu, ez tolestu, askatu.</td>
+  </tr>
+  <tr>
+    <td>Patch panela</td>
+    <td>48,3 cm (19”)</td>
+    <td>2 kg</td>
+    <td>Metala</td>
+    <td>Finkoa; portuak zenbakituta; gaizki konektatuz gero, trafikoa galtzen da.</td>
+    <td>Ireki, konektatu, etiketatu, irakurri.</td>
+  </tr>
+  <tr>
+    <td>Karga-balantzatzailearen kontsola</td>
+    <td>30 × 20 cm pantaila + teklatua</td>
+    <td>Finkoa</td>
+    <td>Plastikoa eta metala</td>
+    <td>Ukimenezkoa; txanda-egoera erakusten du; konfigurazioa aldatzeko berrespena eskatzen du.</td>
+    <td>Ukitu, idatzi, berretsi, egoera irakurri.</td>
+  </tr>
+  <tr>
+    <td>TLS ziurtagiriaren karpeta</td>
+    <td>A4 (agiri digitala)</td>
+    <td>20 g</td>
+    <td>Papera / PDFa</td>
+    <td>Iraungitze-data du; data iragana bada, alerta gorria.</td>
+    <td>Hartu, irakurri, QR-a eskaneatu, konponbidea aplikatu.</td>
+  </tr>
+  <tr>
+    <td>Ticket tableta</td>
+    <td>25 × 18 cm</td>
+    <td>500 g</td>
+    <td>Beira eta aluminioa</td>
+    <td>Ukimenezkoa; eguneratu behar da etapa bakoitzean; denbora-marka du.</td>
+    <td>Irakurri, idatzi, eguneratu, itxi.</td>
+  </tr>
+  <tr>
+    <td>Sekretuen USB tokena</td>
+    <td>6 × 2 cm</td>
+    <td>10 g</td>
+    <td>Plastikoa eta metala</td>
+    <td>Txertatu gabe ezin da deploy-a egin; kentzean saioa amaitzen da.</td>
+    <td>Hartu, txertatu, erabili, kendu.</td>
+  </tr>
+  <tr>
+    <td>UPSaren kontrol-botoia</td>
+    <td>43 × 60 × 8,8 cm (unitatea)</td>
+    <td>25 kg</td>
+    <td>Metala</td>
+    <td>LEDak eta alarmak; karga-maila erakusten du; sakaltzeak abisua ematen du.</td>
+    <td>Sakatu, eutsi, egoera irakurri.</td>
+  </tr>
+  <tr>
+    <td>Etiketa-inprimagailua</td>
+    <td>20 × 15 × 15 cm</td>
+    <td>1,5 kg</td>
+    <td>Plastikoa</td>
+    <td>Erroilua agortu daiteke; etiketa itsastean trakzioa aldatzen da.</td>
+    <td>Idatzi, inprimatu, hartu, itsatsi.</td>
+  </tr>
+  <tr>
+    <td>CO2 itzalgailua</td>
+    <td>60 cm altuera</td>
+    <td>9 kg</td>
+    <td>Altzairua</td>
+    <td>Presiopean; erabiltzean lainoa eta zarata; segurtasun-protokoloa aktibatzen da.</td>
+    <td>Heldu, kakoa kendu, erabili (simulazio gidatua baino ez).</td>
+  </tr>
+</table>
+
+<h3>5.c. Erabiltzailearen akzioak</h3>
+<p><strong>Onartutako mugimenduak:</strong></p>
+<ul>
+  <li><strong>Ibilbidea:</strong> teleportazio bidez (≈ 10 m-ko jauziak) edo joystick leunarekin; abiadura 1,4 m/s, zorabioa saihesteko.</li>
+  <li><strong>Buruaren biraketa:</strong> 360°, zutik zein eserita.</li>
+  <li><strong>Makurtzea:</strong> rack-aren beheko unitateetara iristeko (0,9 m-ko altueran).</li>
+  <li><strong>Hurbiltzea:</strong> objektuetara 30 cm-ra arte, xehetasunak irakurtzeko.</li>
+  <li><strong>Eseritzea:</strong> NOC-eko aulkian, operadore-rola hartzeko.</li>
+  <li><strong>Ez dira onartzen:</strong> korrika egitea, jauzi egitea eta objektuak jaurtitzea.</li>
+</ul>
+<p><strong>Oinarrizko interakzioak:</strong> heldu (<em>grab</em>), askatu (<em>release</em>), sakatu (<em>press</em>), arrastratu (<em>drag</em>), konektatu (<em>plug</em>), kendu (<em>unplug</em>), idatzi (<em>type</em>), irakurri (<em>gaze + confirm</em>), eskaneatu (QR), biratu (<em>rotate</em>), erabili (<em>use</em>).</p>
+<p><strong>Kontrol-mappinga:</strong> VR betaurrekoekin esku biak; ordenagailuan sagua + teklatua (Tab/Enter bidezko nabigazioa eta <code>E</code> tekla interakziorako); tabletan ukipen bidezko botoiak.</p>
+
+<h3>5.d. Interfazea</h3>
+<p><strong>Etengabe bistaratzen den informazioa (HUD):</strong></p>
+<ul>
+  <li>Misioaren izena eta etapa aktiboa (adibidez: “E4 — Hedapena”).</li>
+  <li>Zerbitzuaren egoera: berde/gorri, errore-tasa eta SLA-ren kontagailua.</li>
+  <li>Saioaren denbora eta kontrol-momentuen aurrerapena (C1–C5).</li>
+  <li>Azpitituluak eta audio-argibideen transkripzioa.</li>
+  <li>Pausa, laguntza eta irteera botoiak, beti eskuragarri.</li>
+</ul>
+<p><strong>Menu eta kontrol-panelak:</strong></p>
+<ul>
+  <li>NOC-eko bideo-horma (4 panel: trafikoa, erroreak, logak, alertak).</li>
+  <li>Terminal flotagarria (komandoak idazteko) eta build-panela.</li>
+  <li>Ticket panela eta checklist digitala.</li>
+  <li>Inbentarioa / objektu-zorroa (hartu eta gorde).</li>
+  <li>Taldearen komunikazio-kanala (rolen araberako mezuak).</li>
+</ul>
+<p><strong>Erabiltzailearentzako atzeraelikadura:</strong></p>
+<ul>
+  <li><strong>Bisuala:</strong> LED berdea/gorria, alerta-pultsua, toast mezuak, konexio-arku animatua.</li>
+  <li><strong>Entzumenekoa:</strong> alarma-hotsa, klik mekanikoa, konektorearen txistua.</li>
+  <li><strong>Haptikoa:</strong> dar-dar arina objektua heltzean edo errorea gertatzean.</li>
+  <li><strong>Testuala:</strong> log-ilara erreala, komandoen irteera eta errore-mezu argiak.</li>
+  <li><strong>Kontzeptuala:</strong> tooltip-ak eta glosarioa (zero-downtime, rollback, SLA).</li>
+</ul>
+
+<h3>5.e. Ikaskuntza sekuentzia</h3>
+<p><strong>Prozesuaren diagrama:</strong></p>
+<table>
+  <tr><td class="flow">E0 · Briefing (NOC)</td></tr>
+  <tr><td class="flow">↓</td></tr>
+  <tr><td class="flow">E1 · Esplorazio gidatua (lau guneak)</td></tr>
+  <tr><td class="flow">↓</td></tr>
+  <tr><td class="flow">E2 · Pre-deploy: checklista + rollback plana → <strong>C1</strong></td></tr>
+  <tr><td class="flow">↓</td></tr>
+  <tr><td class="flow">E3 · Datu-basearen migrazioa (babeskopia + scripta)</td></tr>
+  <tr><td class="flow">↓</td></tr>
+  <tr><td class="flow">E4 · Hedapena: build, argitaratze, karga-balantzearen txanda</td></tr>
+  <tr><td class="flow">↓</td></tr>
+  <tr><td class="flow">E5 · Egiaztapena: health check + smoke test → <strong>C2</strong></td></tr>
+  <tr><td class="flow">↓</td></tr>
+  <tr><td class="flow">E6 · Gorabehera: 502 + ziurtagiri iraungia</td></tr>
+  <tr><td class="flow">↓</td></tr>
+  <tr><td class="flow">E7 · Diagnostikoa: sintoma → hipotesi → froga → <strong>C3</strong></td></tr>
+  <tr><td class="flow">↓</td></tr>
+  <tr><td class="flow">E8 · Erantzuna: rollback edo hotfix + berrespena → <strong>C4</strong></td></tr>
+  <tr><td class="flow">↓</td></tr>
+  <tr><td class="flow">E9 · Post-mortem eta debriefinga → <strong>C5</strong></td></tr>
+</table>
+
+<p><strong>Etapen zehaztapena eta zailtasuna</strong> (1 = erraza, 3 = zaila):</p>
+<table>
+  <tr><th style="width:6%">Etapa</th><th style="width:26%">Jarduera</th><th style="width:9%">Denbora</th><th style="width:9%">Zailtasuna</th><th>Irteera / ebidentzia</th></tr>
+  <tr><td>E0</td><td>Briefinga, rolak eta arauak</td><td>8 min</td><td>1</td><td>Taldeak helburua hitzez azaltzen du.</td></tr>
+  <tr><td>E1</td><td>Esplorazio gidatua, hotspotak</td><td>10 min</td><td>1</td><td>Guneen mapa mentala.</td></tr>
+  <tr><td>E2</td><td>Checklista eta rollback plana</td><td>12 min</td><td>2</td><td>Checklista onartua (C1).</td></tr>
+  <tr><td>E3</td><td>Babeskopia eta migrazioa</td><td>8 min</td><td>2</td><td>Migrazio-loga eta berreskuratze-proba.</td></tr>
+  <tr><td>E4</td><td>Build-a eta hedapena</td><td>14 min</td><td>3</td><td>Deploy loga, zerbitzua martxan.</td></tr>
+  <tr><td>E5</td><td>Health checkak eta bezeroaren proba</td><td>10 min</td><td>2</td><td>Neurketa-taula (C2).</td></tr>
+  <tr><td>E6</td><td>Gorabeheraren agerpena</td><td>6 min</td><td>2</td><td>Alerta eta ticket-a.</td></tr>
+  <tr><td>E7</td><td>Diagnostikoa</td><td>14 min</td><td>3</td><td>Diagnostiko-oharra (C3).</td></tr>
+  <tr><td>E8</td><td>Rollback edo hotfix</td><td>10 min</td><td>3</td><td>Erantzun-loga eta zerbitzua berde (C4).</td></tr>
+  <tr><td>E9</td><td>Post-mortem eta debriefinga</td><td>13 min</td><td>2</td><td>Post-mortem txostena (C5).</td></tr>
+</table>
+
+<p><strong>Kontrol momentuak:</strong></p>
+<ol>
+  <li><strong>C1 — Pre-deploy atea:</strong> checklista osoa eta rollback plana onartu gabe ezin da E3 hasi. Irakasleak edo sistemak automatikoki baliozkotzen du.</li>
+  <li><strong>C2 — Egiaztapen atea:</strong> health check guztiak berde eta bezeroaren smoke testa gaindituta; bestela, E6 ez da aktibatzen.</li>
+  <li><strong>C3 — Diagnostiko atea:</strong> ikasleak sintoma → hipotesi → froga → erabakia katea idatziz justifikatu behar du; irakasleak berrikusten du.</li>
+  <li><strong>C4 — Berrespen atea:</strong> zerbitzua 5 minutu jarraian berde egon behar da; bestela, rollback-a berriro probatu.</li>
+  <li><strong>C5 — Itxiera atea:</strong> post-mortem txostena eta galdetegia (≥ %70) entregatu.</li>
+</ol>
+
+<p><strong>Prozesuaren amaiera baldintzak:</strong></p>
+<ul>
+  <li>Zerbitzua 5 minutu jarraian berde dago (SLO ≥ %99,9 simulazioan).</li>
+  <li>Rollback-a edo hotfix-a dokumentatuta dago eta frogatuta.</li>
+  <li>Post-mortem txostena entregatuta (kronologia, arrazoia, hobekuntzak, ekintza-planak).</li>
+  <li>Galdetegi laburra ≥ %70 gainditu da.</li>
+  <li>Taldearen debriefing-ean parte hartu da (autoebaluazioa eta feedbacka).</li>
+  <li>Saioa VR/360 moduan edo 2D modu baliokidean egin da; bietan ebidentzia berak eskatzen dira.</li>
+</ul>
+
+<h2>Eranskina — Irisgarritasuna eta lizentzia</h2>
+<ul>
+  <li><strong>2D modu baliokidea:</strong> informazio eta erabaki berak, nabigazio linealarekin; ez da edukirik galtzen.</li>
+  <li><strong>Azpitituluak eta transkripzioa:</strong> audio-argibide guztiek testu bertsioa dute.</li>
+  <li><strong>Mugimenduaren kontrola:</strong> teleportazioa lehenetsi, ikus-eremua murrizteko aukera, comfort modua eta pausa tekla batekin.</li>
+  <li><strong>Teklatua eta kontrastea:</strong> Tab/Enter bidezko nabigazioa, foku ikusgai, WCAG 2.2 AA gutxieneko kontrastea.</li>
+  <li><strong>Lizentzia:</strong> CC BY-NC-SA 4.0 — erabil daiteke, egokitu eta birbanatu, egilea aipatuz, erabilera ez-komertzialarekin eta lizentzia bera mantenduz.</li>
+  <li><strong>Egituraren aitortza:</strong> “3.B Ingurune inmersiboetarako prozesu bat proposatu – GIDOIA”, Eusko Jaurlaritzaren Lanbide Heziketako Sailburuordetza (CC BY-NC-SA 4.0).</li>
+</ul>
+
+<p class="txiki">Dokumentua: Jon Rubio · CIFP Usurbil LHII · 2026 · CC BY-NC-SA 4.0</p>
+
+</body>
+</html>

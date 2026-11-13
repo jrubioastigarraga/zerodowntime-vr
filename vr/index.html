@@ -1,0 +1,550 @@
+<!doctype html>
+<html lang="eu">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<title>Zero-downtime · Uhin Apps datu-zentroa (VR)</title>
+<meta name="description" content="Web aplikazio baten hedapena eta gorabehera baten kudeaketa: Three.js + WebXR simulazioa.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%231f4e79'/%3E%3Ctext x='32' y='42' font-size='28' text-anchor='middle' fill='%23fff' font-family='monospace'%3E%3C/%3E%3C/text%3E%3C/svg%3E">
+<style>
+:root{--bg:#12161c;--fg:#eef1f5;--muted:#a7b1bd;--panel:rgba(16,21,28,.88);--line:#333c48;--accent:#6aa9ec;--ok:#7cc47f;--ko:#ff6b5e;--warn:#f0b44c}
+html,body{margin:0;height:100%;overflow:hidden;background:var(--bg);color:var(--fg);font:15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+canvas{display:block}
+#hud{position:fixed;left:12px;top:12px;width:min(380px,calc(100vw - 24px));background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 14px}
+#hud h1{font-size:14px;margin:0 0 2px;color:var(--accent);letter-spacing:.02em}
+#step{font-size:17px;font-weight:650;margin:4px 0 2px}
+#hint{color:var(--muted);margin:0 0 8px;font-size:13px}
+#stat{display:flex;flex-wrap:wrap;gap:5px;font-size:12px}
+.chip{border:1px solid #3a4350;border-radius:999px;padding:1px 8px;color:var(--muted)}
+.chip.on{border-color:var(--ok);color:var(--ok)}
+#msg{margin-top:8px;min-height:2.7em;font-weight:600;font-size:13px}
+#msg.ok{color:var(--ok)}#msg.ko{color:var(--ko)}#msg.warn{color:var(--warn)}
+#btns{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap}
+button.b{background:#242b34;color:var(--fg);border:1px solid #46505e;border-radius:8px;padding:5px 10px;font:inherit;font-size:13px;cursor:pointer}
+button.b:hover{background:#2f3742}
+button.b:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+#flash{position:fixed;inset:0;pointer-events:none;background:#ff5a4a;opacity:0;transition:opacity .5s}
+#end{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.62)}
+#end .card{background:#1b222b;border:1px solid #3a4350;border-radius:12px;padding:20px 24px;max-width:460px;margin:16px}
+#end h2{margin:0 0 8px;color:var(--ok);font-size:19px}
+#end ul{padding-left:20px}
+#cmd{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.55)}
+#cmd .card{background:#151b23;border:1px solid #3a4350;border-radius:12px;padding:18px 22px;width:min(520px,92vw);font-family:ui-monospace,Consolas,monospace}
+#cmd h2{font:600 16px system-ui;margin:0 0 6px;color:var(--accent)}
+#cmd p{font:13px system-ui;color:var(--muted);margin:0 0 10px}
+#cmd button{display:block;width:100%;text-align:left;margin:6px 0;padding:8px 10px;background:#202832;color:#dfe7f0;border:1px solid #3d4756;border-radius:8px;font:13px ui-monospace,Consolas,monospace;cursor:pointer}
+#cmd button:hover{background:#28313d}
+#cmd button.done{border-color:var(--ok);color:var(--ok)}
+#cmdout{min-height:1.6em;font-size:12px;color:var(--muted);margin:8px 0}
+#info{position:fixed;right:12px;bottom:12px;max-width:min(420px,46vw);font-size:12px;color:var(--muted);background:var(--panel);padding:6px 10px;border-radius:8px}
+#info a{color:var(--accent)}
+@media (max-width:820px){#info{left:12px;right:12px;max-width:none;bottom:76px}}
+</style>
+<script type="importmap">
+{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}
+</script>
+</head>
+<body>
+<div id="hud" role="status" aria-live="polite">
+  <h1>UHIN APPS · DATU-ZENTROA · ZERO-DOWNTIME</h1>
+  <div id="step"></div>
+  <div id="hint"></div>
+  <div id="stat"></div>
+  <div id="msg"></div>
+  <div id="btns">
+    <button class="b" id="bLabels" aria-pressed="true">Etiketak: bai</button>
+    <button class="b" id="bHelp">Laguntza</button>
+    <button class="b" id="bReset">Berriro hasi</button>
+  </div>
+</div>
+<div id="flash"></div>
+
+<div id="cmd" role="dialog" aria-modal="true" aria-labelledby="cmdt">
+  <div class="card">
+    <h2 id="cmdt">Terminala · hedapen-komandoak</h2>
+    <p>Exekutatu hiru komandoak ordena zuzenan.</p>
+    <button data-cmd="build">$ npm run build</button>
+    <button data-cmd="migrate">$ npm run db:migrate</button>
+    <button data-cmd="deploy">$ ./deploy.sh --zero-downtime</button>
+    <div id="cmdout"></div>
+    <button class="b" id="cmdclose" style="width:auto;font:13px system-ui">Itxi terminala</button>
+  </div>
+</div>
+
+<div id="end"><div class="card"><h2>Hedapena eta gorabehera kudeatuta ✔</h2><div id="report"></div>
+  <div style="margin-top:12px"><button class="b" id="bAgain">Berriro egin</button></div></div></div>
+
+<div id="info">
+  <span id="hov">Klik: hautatu · WASD / eskuin-botoia: mugitu · klik bikoitza lurrean: joan hara · VR: katua</span><br>
+  <span style="opacity:.85">3D elementuak prozeduraz sortuak · Three.js (MIT) · Jon Rubio, CIFP Usurbil LHII · CC BY-NC-SA 4.0</span>
+</div>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { VRButton } from 'three/addons/webxr/VRButton.js';
+
+/* ---------- eszena ---------- */
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight);
+renderer.xr.enabled = true;
+document.body.appendChild(renderer.domElement);
+const vrBtn = VRButton.createButton(renderer);
+document.body.appendChild(vrBtn);
+const VRTXT = { 'ENTER VR': 'VR-n sartu', 'EXIT VR': 'VR-tik irten', 'VR NOT SUPPORTED': 'VR ez dago erabilgarri', 'VR NOT ALLOWED': 'VR ez dago baimenduta', 'WEBXR NOT AVAILABLE': 'WebXR ez dago erabilgarri', 'WEBXR NEEDS HTTPS': 'WebXR-ek HTTPS behar du' };
+const trVR = () => { const t = VRTXT[vrBtn.textContent.trim().toUpperCase()]; if (t) vrBtn.textContent = t; };
+trVR(); new MutationObserver(trVR).observe(vrBtn, { childList: true, characterData: true, subtree: true });
+
+const scene = new THREE.Scene();
+const BG = new THREE.Color(0x10151c);
+scene.background = BG.clone();
+scene.fog = new THREE.Fog(0x10151c, 12, 26);
+
+const camera = new THREE.PerspectiveCamera(70, innerWidth / innerHeight, 0.05, 60);
+camera.position.set(0, 1.75, 4.15);
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.target.set(0, 1.25, -1.2);
+controls.minDistance = 0.5; controls.maxDistance = 5;
+controls.maxPolarAngle = Math.PI * 0.57;
+controls.enableDamping = true;
+controls.screenSpacePanning = false;
+controls.update();
+
+/* ---------- gelaren mugak eta nabigazioa ---------- */
+const ROOM = { x: [-3.7, 3.7], z: [-4.5, 4.6], y: [0.7, 2.35] };
+const clampV = v => { v.x = THREE.MathUtils.clamp(v.x, ROOM.x[0], ROOM.x[1]); v.z = THREE.MathUtils.clamp(v.z, ROOM.z[0], ROOM.z[1]); };
+function keepInside() {
+  const off = camera.position.clone().sub(controls.target);
+  clampV(controls.target); controls.target.y = THREE.MathUtils.clamp(controls.target.y, .2, 2.1);
+  camera.position.copy(controls.target).add(off);
+  clampV(camera.position); camera.position.y = THREE.MathUtils.clamp(camera.position.y, ROOM.y[0], ROOM.y[1]);
+}
+function moveBy(dx, dz) { controls.target.x += dx; controls.target.z += dz; camera.position.x += dx; camera.position.z += dz; keepInside(); }
+let glide = null;
+const floorPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+renderer.domElement.addEventListener('dblclick', e => {
+  const r = renderer.domElement.getBoundingClientRect();
+  const v = new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
+  const rc = new THREE.Raycaster(); rc.setFromCamera(v, camera);
+  const p = new THREE.Vector3(); if (!rc.ray.intersectPlane(floorPlane, p)) return;
+  clampV(p);
+  glide = { d: new THREE.Vector3(p.x - controls.target.x, 0, p.z - controls.target.z), left: 1 };
+});
+const keys = new Set();
+addEventListener('keydown', e => { if (!e.target.closest('button')) keys.add(e.key.toLowerCase()); });
+addEventListener('keyup', e => keys.delete(e.key.toLowerCase()));
+addEventListener('blur', () => keys.clear());
+const fwd = new THREE.Vector3(), side = new THREE.Vector3();
+function navStep(dt) {
+  if (renderer.xr.isPresenting) return;
+  if (glide) { const s = glide.d.clone().multiplyScalar(Math.min(dt * 4, glide.left)); moveBy(s.x, s.z); glide.left -= Math.min(dt * 4, glide.left); if (glide.left <= 0) glide = null; }
+  let f = 0, s = 0;
+  if (keys.has('w') || keys.has('arrowup')) f += 1;
+  if (keys.has('s') || keys.has('arrowdown')) f -= 1;
+  if (keys.has('d') || keys.has('arrowright')) s += 1;
+  if (keys.has('a') || keys.has('arrowleft')) s -= 1;
+  if (!f && !s) return;
+  camera.getWorldDirection(fwd); fwd.y = 0; fwd.normalize();
+  side.crossVectors(fwd, camera.up).normalize();
+  const sp = 2.1 * dt;
+  moveBy((fwd.x * f + side.x * s) * sp, (fwd.z * f + side.z * s) * sp);
+}
+controls.addEventListener('change', keepInside);
+
+/* ---------- materialak eta laguntzaileak ---------- */
+scene.add(new THREE.HemisphereLight(0xbcd0e6, 0x1a1f26, 0.95));
+const lamp1 = new THREE.PointLight(0xdce8ff, 18, 12, 1.7); lamp1.position.set(-1.5, 2.9, -3.2); scene.add(lamp1);
+const lamp2 = new THREE.PointLight(0xdce8ff, 16, 12, 1.7); lamp2.position.set(2.2, 2.9, 1.6); scene.add(lamp2);
+const lamp3 = new THREE.PointLight(0xffd9a3, 10, 9, 1.8); lamp3.position.set(0.5, 2.7, 3.6); scene.add(lamp3);
+
+const M = (c, o = {}) => new THREE.MeshStandardMaterial({ color: c, roughness: .78, metalness: .12, ...o });
+function box(w, h, d, mat, x, y, z, parent = scene) {
+  const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat); m.position.set(x, y, z); parent.add(m); return m;
+}
+function cyl(r, h, mat, x, y, z, parent = scene, seg = 20) {
+  const m = new THREE.Mesh(new THREE.CylinderGeometry(r, r, h, seg), mat); m.position.set(x, y, z); parent.add(m); return m;
+}
+
+/* ---------- etiketak ---------- */
+const labels = [];
+function label(text, x, y, z, size = .12) {
+  const c = document.createElement('canvas'); const g = c.getContext('2d');
+  g.font = '600 40px system-ui,sans-serif';
+  const w = Math.ceil(g.measureText(text).width) + 30; c.width = w; c.height = 60;
+  g.font = '600 40px system-ui,sans-serif';
+  g.fillStyle = 'rgba(12,17,24,.86)'; g.beginPath(); g.roundRect(0, 0, w, 60, 13); g.fill();
+  g.fillStyle = '#eef1f5'; g.textBaseline = 'middle'; g.fillText(text, 15, 32);
+  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: (() => { const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t; })(), depthTest: false }));
+  s.scale.set(size * w / 60, size, 1); s.position.set(x, y, z); s.renderOrder = 10; scene.add(s); labels.push(s); return s;
+}
+
+/* ---------- hautaketak ---------- */
+const pickables = [];
+function pick(mesh, id, name) { mesh.userData.id = id; mesh.userData.name = name; pickables.push(mesh); return mesh; }
+
+/* ---------- gela ---------- */
+const W = M(0x2b333d), F = M(0x252d37), CEIL = M(0x232b35);
+box(8, .05, 10.2, F, 0, -.025, .05);
+box(8, 3.2, .08, W, 0, 1.6, -4.95);
+box(8, 3.2, .08, W, 0, 1.6, 5.05);
+box(.08, 3.2, 10.2, W, -3.95, 1.6, .05);
+box(.08, 3.2, 10.2, W, 3.95, 1.6, .05);
+box(8, .05, 10.2, CEIL, 0, 3.2, .05);
+// zoruaren gida-lerroak
+for (let z = -4; z < 5; z += 1.2) box(7.4, .004, .03, M(0x3b4754), 0, .002, z);
+// sabaiko panelak
+for (let x = -2.6; x <= 2.7; x += 1.75) box(1.1, .03, 2.4, M(0xc9d6e6, { emissive: 0x8fa6bd, emissiveIntensity: .28 }), x, 3.16, -2.4);
+for (let x = -2.6; x <= 2.7; x += 1.75) box(1.1, .03, 2.4, M(0xc9d6e6, { emissive: 0x8fa6bd, emissiveIntensity: .22 }), x, 3.16, 1.6);
+
+/* ---------- NOC aretoa (iparraldea) ---------- */
+const panelCanvas = document.createElement('canvas'); panelCanvas.width = 1024; panelCanvas.height = 512;
+const panelTex = new THREE.CanvasTexture(panelCanvas);
+panelTex.colorSpace = THREE.SRGBColorSpace;
+const wallPanel = new THREE.Mesh(new THREE.PlaneGeometry(3.8, 1.95), new THREE.MeshBasicMaterial({ map: panelTex }));
+wallPanel.position.set(0, 2.05, -4.9); scene.add(wallPanel);
+pick(wallPanel, 'panela', 'Monitorizazio-panela (NOC)');
+
+// operadore-mahaia
+box(3.0, .08, .9, M(0x3a4552), 0, .78, -3.55);
+box(.08, .78, .08, M(0x2b333d), -1.3, .39, -3.55);
+box(.08, .78, .08, M(0x2b333d), 1.3, .39, -3.55);
+for (const dx of [-1.0, 0, 1.0]) { const c = box(.5, .06, .5, M(0x232a33), dx, .45, -3.1); box(.06, .45, .06, M(0x232a33), dx, .22, -3.1); c.userData = {}; }
+// operadore-monitoreak
+for (const dx of [-.9, .1]) {
+  box(.05, .28, .05, M(0x2b333d), dx, .96, -3.45);
+  box(.62, .38, .04, M(0x0b0f14, { emissive: 0x0d3357, emissiveIntensity: .8 }), dx, 1.18, -3.45);
+}
+label('NOC · monitorizazioa', 0, 2.9, -4.4, .16);
+
+// tableta (ticket)
+const tablet = box(.34, .02, .24, M(0x11151a, { emissive: 0x0b2b45, emissiveIntensity: .9 }), .75, .84, -3.5);
+pick(tablet, 'tableta', 'Ticket tableta');
+label('Ticket-a', .75, 1.02, -3.5, .09);
+
+// ziurtagiriaren karpeta
+const certFolder = box(.24, .015, .32, M(0xe8dcc0), -.55, .84, -3.5);
+pick(certFolder, 'ziurtagiria', 'TLS ziurtagiriaren karpeta');
+label('TLS ziurtagiria', -.55, 1.02, -3.5, .09);
+
+/* ---------- rack korridorea (mendebaldea) ---------- */
+const racks = [];
+for (let i = 0; i < 3; i++) {
+  const z = -1.6 + i * 1.5;
+  const body = box(1.0, 2.05, .95, M(0x2f3945), -3.35, 1.02, z);
+  box(.9, .04, .85, M(0x1a2028), -3.35, 2.06, z);
+  // rack-aren atea (heldulekua)
+  const door = new THREE.Group(); door.position.set(-2.84, 1.02, z - .47); scene.add(door);
+  box(.03, 1.9, .9, M(0x1b222b, { metalness: .35, roughness: .5 }), 0, 0, .47, door);
+  box(.03, .12, .05, M(0x9aa7b4), .02, 0, .82, door);
+  // LED zerrenda (egoera)
+  box(.012, 1.6, .02, M(0x0b3b22, { emissive: 0x35d67a, emissiveIntensity: 1.1 }), .022, 0, .12, door);
+  // zerbitzari-unitateak (aurrealdea)
+  for (let k = 0; k < 9; k++) box(.014, .075, .78, M(0x141a21, { metalness: .4, roughness: .55 }), .02, -.82 + k * .19, .45, door);
+  racks.push({ body, door, z });
+}
+pick(racks[0].door, 'rack1', 'Rack R1 · aplikazioa');
+pick(racks[1].body, 'rack2', 'Rack R2 · datu-basea');
+pick(racks[2].body, 'rack3', 'Rack R3 · sare/segurtasuna');
+label('R1 · APLIKAZIOA', -2.72, 2.22, -1.6, .085);
+label('R2 · DATU-BASEA', -2.72, 2.22, -.1, .085);
+label('R3 · SEGURTASUNA', -2.72, 2.22, 1.4, .085);
+
+// blade zerbitzaria (R1 barruan)
+const blade = box(.7, .09, .7, M(0x8a97a6, { metalness: .55, roughness: .35 }), -3.3, 1.35, -1.6);
+blade.visible = false;
+pick(blade, 'blade', 'Zerbitzari-bladea');
+const bladeLed = new THREE.Mesh(new THREE.SphereGeometry(.03, 12, 10), M(0x1a3a1a, { emissive: 0x33dd55, emissiveIntensity: 1.5 }));
+bladeLed.position.set(-2.95, 1.38, -1.85); blade.add(bladeLed);
+
+// karga-balantzatzailearen kontsola
+box(.5, 1.05, .4, M(0x323c49), -1.35, .52, .55);
+const lbScreen = new THREE.Mesh(new THREE.PlaneGeometry(.42, .28), new THREE.MeshBasicMaterial({ color: 0x123322 }));
+lbScreen.position.set(-1.35, 1.12, .76); scene.add(lbScreen);
+pick(lbScreen, 'lb', 'Karga-balantzatzailearen kontsola');
+label('Karga-balantzailea', -1.35, 1.42, .6, .1);
+
+// zuzeneko kable gorria (arrisku-faktorea)
+const liveCable = box(.06, .05, 1.4, M(0xb8322a, { emissive: 0x5a0f0a, emissiveIntensity: .6 }), -2.6, .09, .75);
+pick(liveCable, 'kablea', 'Kable gorria (zuzenekoa)');
+
+// UPSa eta itzalgailua (dekoratzaileak)
+const ups = box(.7, 1.3, .6, M(0x3b4653), -3.3, .65, 2.6); pick(ups, 'ups', 'UPSa');
+label('UPSa', -3.0, 1.45, 2.6, .09);
+const ext = cyl(.12, .62, M(0xa63a2f), -3.45, .31, 3.6); pick(ext, 'itzalgailua', 'CO2 itzalgailua');
+
+/* ---------- staging gela (ekialdea) ---------- */
+box(2.2, .08, .85, M(0x3a4552), 2.5, .78, 1.0);
+box(.08, .78, .08, M(0x2b333d), 1.5, .39, .65);
+box(.08, .78, .08, M(0x2b333d), 3.5, .39, .65);
+const monitor = box(.75, .46, .04, M(0x0b0f14, { emissive: 0x0a2233, emissiveIntensity: .9 }), 2.5, 1.22, .85);
+pick(monitor, 'terminal', 'Terminala (staging)');
+box(.06, .3, .06, M(0x2b333d), 2.5, .95, .85);
+const keyboard = box(.42, .02, .16, M(0x1b2129), 2.5, .83, 1.08);
+pick(keyboard, 'terminal', 'Terminala (staging)');
+label('Terminala · staging', 2.5, 1.62, .85, .11);
+
+// USB tokena
+const token = box(.06, .02, .14, M(0x1f6feb, { emissive: 0x0b2f6b, emissiveIntensity: .7 }), 1.95, .84, 1.15);
+pick(token, 'token', 'Sekretuen USB tokena');
+label('USB tokena', 1.95, 1.0, 1.15, .08);
+
+// etiketa inprimagailua (dekoratzailea)
+box(.4, .3, .35, M(0x505b68), 3.4, .93, 1.2);
+
+/* ---------- bezeroaren bulegoa (hegoaldea) ---------- */
+const glass = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 2.2), new THREE.MeshStandardMaterial({ color: 0x9fd0ee, transparent: true, opacity: .16, roughness: .05, metalness: .1, side: THREE.DoubleSide }));
+glass.position.set(2.4, 1.5, 3.4); glass.rotation.y = -Math.PI / 2; scene.add(glass);
+box(.1, 2.4, 2.5, M(0x3a4552), 3.7, 1.2, 4.2);
+box(1.4, .08, .7, M(0x4a3c2f), 2.9, .78, 4.1);
+const clientScreen = box(.02, .5, .8, M(0x0b0f14, { emissive: 0x0a3a1a, emissiveIntensity: 1.0 }), 2.05, 1.3, 4.1);
+pick(clientScreen, 'bezeroa', 'Bezeroaren pantaila');
+label('Bezeroaren aplikazioa', 2.5, 1.95, 4.1, .1);
+
+/* ---------- HUD panela marraztu ---------- */
+const $ = id => document.getElementById(id);
+let serviceOk = true, incident = false;
+function drawPanel() {
+  const g = panelCanvas.getContext('2d');
+  g.fillStyle = '#0b0f14'; g.fillRect(0, 0, 1024, 512);
+  g.fillStyle = '#152029'; g.fillRect(0, 0, 1024, 96);
+  g.fillStyle = '#6aa9ec'; g.font = '600 40px system-ui'; g.fillText('UHIN APPS · NOC', 40, 62);
+  const ok = serviceOk && !incident;
+  const col = ok ? '#7cc47f' : '#ff6b5e';
+  g.fillStyle = '#aab3c0'; g.font = '500 34px system-ui'; g.fillText('Zerbitzuaren egoera', 40, 175);
+  g.fillStyle = col; g.font = '700 86px system-ui'; g.fillText(ok ? 'BERDE' : 'GORRI', 40, 265);
+  g.fillStyle = '#c8d2de'; g.font = '500 32px system-ui';
+  g.fillText('Errore-tasa: ' + (ok ? '0,02 %' : '18,40 %'), 40, 340);
+  g.fillText('SLO: ' + (ok ? '99,98 %' : '92,10 %'), 40, 390);
+  g.fillText('TLS ziurtagiria: ' + (S && S.fixed ? 'baliozkoa' : 'IRAUNGITA'), 40, 440);
+  if (!ok) { g.fillStyle = '#ff6b5e'; g.font = '700 40px system-ui'; g.fillText('502 BAD GATEWAY', 640, 200); g.font = '500 30px system-ui'; g.fillText('bezeroek errorea dute', 640, 250); }
+  panelTex.needsUpdate = true;
+}
+
+/* ---------- egoera ---------- */
+const STEPS = [
+  ['1. Irakurri ticket-a', 'NOC-eko mahaira joan eta ticket tableta ukitu.'],
+  ['2. Prestatu staging', 'Joan staging gelara eta hartu USB tokena.'],
+  ['3. Exekutatu komandoak', 'Tokena terminalean sartu eta hiru komandoak ordenan exekutatu.'],
+  ['4. Ireki rack R1', 'Rack korridorea: ireki R1 rack-aren atea.'],
+  ['5. Hedatu bertsioa', 'R1 barruko blade zerbitzaria ukitu (hot-swap).'],
+  ['6. Aktibatu karga-balantzea', 'Karga-balantzatzailearen kontsolan trafikoa aktibatu.'],
+  ['7. Egiaztatu bezeroa', 'Bezeroaren pantailan funtzio kritikoak egiaztatu.'],
+  ['8. Gorabehera!', 'Zerbitzua gorri: joan NOC-era eta aztertu panela.'],
+  ['9. Diagnostikatu', 'Irakurri TLS ziurtagiriaren karpeta mahai gainean.'],
+  ['10. Berritu ziurtagiria', 'Karga-balantzatzailearen kontsolan ziurtagiria berritu.'],
+  ['11. Egiaztatu konponketa', 'Itzuli NOC-era eta egiaztatu panela berde dagoela.'],
+  ['12. Sinatu post-mortema', 'Ticket tabletan post-mortema sinatu eta saioa itxi.'],
+];
+let S;
+function reset() {
+  S = { step: 0, hand: null, tokenIn: false, built: false, migrated: false, deployed: false, lb: false, client: false,
+        incident: false, diag: false, fixed: false, signed: false, errors: 0, warns: 0, t0: performance.now(), done: false, msg: '', msgCls: '' };
+  serviceOk = true; incident = false;
+  blade.visible = false; token.visible = true;
+  racks[0].door.rotation.y = 0;
+  lbScreen.material.color.setHex(0x123322);
+  clientScreen.material.color.setHex(0x0a3a1a);
+  cmdIdx = 0;
+  document.querySelectorAll('#cmd button[data-cmd]').forEach(b => b.classList.remove('done'));
+  $('cmdout').textContent = '';
+  $('end').style.display = 'none'; $('cmd').style.display = 'none';
+  setMsg('', '');
+  drawPanel(); render();
+}
+function render() {
+  const [t, h] = STEPS[Math.min(S.step, STEPS.length - 1)];
+  $('step').textContent = t; $('hint').textContent = h;
+  const chip = (txt, on) => '<span class="chip ' + (on ? 'on' : '') + '">' + txt + '</span>';
+  $('stat').innerHTML = chip('Tokena', S.tokenIn) + chip('Deploy', S.deployed) + chip('LB', S.lb) +
+    chip('Ziurtagiria', S.fixed) + chip('Akatsak: ' + S.errors, false);
+  $('msg').textContent = S.msg; $('msg').className = S.msgCls;
+  drawPanel();
+}
+function setMsg(t, cls) { S.msg = t; S.msgCls = cls || ''; const m = $('msg'); m.textContent = t; m.className = cls || ''; }
+const ok = t => { setMsg(t, 'ok'); beep(880); render(); };
+const warn = t => { S.warns++; setMsg(t, 'warn'); beep(330, .14, 'square'); render(); };
+const bad = t => { S.errors++; setMsg(t, 'ko'); beep(140, .5, 'sawtooth'); flash(); render(); };
+
+let actx;
+function beep(f, d = .12, type = 'sine') {
+  try { actx = actx || new AudioContext(); const o = actx.createOscillator(), v = actx.createGain(); o.type = type; o.frequency.value = f; v.gain.value = .07; o.connect(v).connect(actx.destination); o.start(); o.stop(actx.currentTime + d); } catch (e) {}
+}
+function flash() { const f = $('flash'); f.style.opacity = .8; setTimeout(() => f.style.opacity = 0, 420); }
+
+/* ---------- logika ---------- */
+function act(mesh) {
+  if (!mesh || S.done) return;
+  const id = mesh.userData.id;
+  switch (id) {
+    case 'panela':
+      if (S.step === 7) { S.step = 8; incident = true; serviceOk = false; ok('Panela: 502 BAD GATEWAY eta errore-tasa %18,4. Zerbitzua gorri dago.'); }
+      else if (S.step === 10) { S.step = 11; serviceOk = true; incident = false; ok('Panela berde: SLO %99,98 eta TLS ziurtagiria baliozkoa. Joan ticket-era post-mortema sinatzera.'); }
+      else if (S.step === 11) { warn('Oraindik ez: sinatu post-mortema ticket tabletan (NOC mahai gainean).'); }
+      else setMsg('Panela: zerbitzuaren egoera eta metrikak erakusten ditu. Oraingoz dena berde.', 'warn');
+      break;
+
+    case 'tableta':
+      if (S.step === 0) { S.step = 1; ok('Ticket-a irakurrita: “Bertsio berria produkziora, zero-downtime. Lehenik staging probak.”'); }
+      else if (S.step === 11) { S.done = true; S.step = 12; finish(); }
+      else setMsg('Ticket-a: egitekoen zerrenda. Oraingoz ez dago sinatzeko ezer.', 'warn');
+      break;
+
+    case 'token':
+      if (S.tokenIn) return warn('Tokena terminalean sartuta dago jada.');
+      if (S.step < 1) return warn('Lehenik irakurri ticket-a.');
+      S.hand = 'token'; S.tokenIn = true; token.visible = false; S.step = Math.max(S.step, 2);
+      ok('USB tokena eskuan hartu duzu. Orain terminalean sartu behar duzu.');
+      break;
+
+    case 'terminal':
+      if (!S.tokenIn) return warn('Terminalak sekretuen USB tokena eskatzen du. Hartu tokena mahai gainean.');
+      if (S.step >= 3) return warn('Komandoak exekutatuta daude. Joan rack R1-ra.');
+      $('cmd').style.display = 'flex';
+      setMsg('Terminala irekita: exekutatu hiru komandoak ordena zuzenan.', 'warn');
+      break;
+
+    case 'rack1':
+      if (S.step < 3) return warn('Lehenik komandoak exekutatu behar dira stageingen.');
+      if (racks[0].door.rotation.y < -0.9) return warn('R1 rack-aren atea irekita dago jada.');
+      racks[0].door.rotation.y = -1.15; blade.visible = true;
+      ok('R1 rack-aren atea irekita. Blade zerbitzaria ikusgai dago.');
+      break;
+
+    case 'blade':
+      if (racks[0].door.rotation.y > -0.9) return warn('Ireki R1 rack-aren atea lehenik.');
+      if (S.deployed) return warn('Bertsio berria jada instalatuta dago.');
+      S.deployed = true; S.step = 5;
+      ok('Blade hot-swap: bertsio berria martxan. Hedapena arrakastatsua.');
+      break;
+
+    case 'lb':
+      if (S.step === 5) {
+        S.lb = true; S.step = 6; lbScreen.material.color.setHex(0x1f7a3a);
+        ok('Karga-balantzailea aktibatuta: trafikoaren %100 bertsio berrira.');
+      } else if (S.step === 9) {
+        S.fixed = true; S.step = 10; serviceOk = true; incident = false;
+        lbScreen.material.color.setHex(0x1f7a3a);
+        ok('TLS ziurtagiria berrituta. Zerbitzua normalizatzen ari da.');
+      } else if (S.step < 5) warn('Oraindik ez: amaitutako hedapena behar da.');
+      else setMsg('Karga-balantzatzailea: bi nodoak osasuntsu. Ezer ez da aldatu.', 'warn');
+      break;
+
+    case 'bezeroa':
+      if (S.step < 6) return warn('Hedapena ez dago eginda; bezeroak oraindik bertsio zaharra darabil.');
+      if (S.step === 6) {
+        S.client = true; S.step = 7; clientScreen.material.color.setHex(0x2f8a46);
+        serviceOk = false; incident = true;
+        ok('Bezeroaren funtzio kritikoak ondo... baina bat-batean zerbitzua gorri jarri da!');
+        setTimeout(() => { if (!S.done) { flash(); setMsg('ALUARMA: 502 errorea erabiltzaile guztientzat. Zoaz NOC-era eta aztertu panela.', 'ko'); beep(150, .5, 'sawtooth'); S.step = 7; render(); } }, 1200);
+      } else setMsg('Bezeroaren pantaila: errorea (502) edo OK, panelaren arabera.', 'warn');
+      break;
+
+    case 'ziurtagiria':
+      if (S.step < 7) return warn('Ziurtagiriaren karpeta: oraindik ez dago diagnostikorik.');
+      if (!S.diag) { S.diag = true; S.step = 9; ok('Diagnostikoa: TLS ziurtagiria duela 3 egun iraungi zen. Horrek 502 errorea sortzen du. Joan karga-balantzailearen kontsolara.'); }
+      else setMsg('Ziurtagiria: iraungita zegoen eta berrituta dago.', 'ok');
+      break;
+
+    case 'kablea':
+      bad('AKATS KRITIKOA: zuzeneko kable gorria kendu duzu eta zerbitzua erori da. Berrezarri konexioa eta jarraitu.');
+      break;
+
+    case 'ups': setMsg('UPSa: karga %87. Ez da zeregina, baina egon badago.', 'warn'); break;
+    case 'itzalgailua': setMsg('CO2 itzalgailua: prest. Ez da zeregina.', 'warn'); break;
+    case 'rack2': setMsg('R2 datu-basearen rack-a: ez da zeregina oraingo urrats honetan.', 'warn'); break;
+    case 'rack3': setMsg('R3 sare/segurtasun rack-a: ez da zeregina oraingo urrats honetan.', 'warn'); break;
+    default: setMsg(mesh.userData.name || '', 'warn');
+  }
+  render();
+}
+
+/* ---------- terminal komandoak ---------- */
+const cmdOrder = ['build', 'migrate', 'deploy'];
+let cmdIdx = 0;
+document.querySelectorAll('#cmd button[data-cmd]').forEach(b => {
+  b.addEventListener('click', () => {
+    const k = b.dataset.cmd;
+    if (cmdIdx >= 3) return;
+    if (cmdOrder[cmdIdx] !== k) { warn('Ordena okerra: lehenengo ' + cmdOrder[cmdIdx] + ' exekutatu.'); return; }
+    cmdIdx++; b.classList.add('done');
+    const out = { build: 'Build ona: dist/ 2,4 MB', migrate: 'Migrazioa eginda: 0 errore', deploy: 'Hedapena eginda: 2 nodo, zero-downtime' }[k];
+    $('cmdout').textContent = out;
+    beep(760);
+    if (cmdIdx === 3) {
+      S.step = 3;
+      setTimeout(() => { $('cmd').style.display = 'none'; ok('Hiru komandoak ondo: bertsioa produkzioan dago. Joan rack R1-ra.'); }, 700);
+    }
+  });
+});
+$('cmdclose').onclick = () => { $('cmd').style.display = 'none'; render(); };
+
+/* ---------- amaiera ---------- */
+function finish() {
+  const s = Math.round((performance.now() - S.t0) / 1000);
+  $('report').innerHTML = '<p>Hedapena eta gorabehera zuzen kudeatu dituzu.</p><ul>' +
+    '<li>Denbora: <strong>' + Math.floor(s / 60) + ' min ' + (s % 60) + ' s</strong></li>' +
+    '<li>Akats kritikoak: <strong>' + S.errors + '</strong></li>' +
+    '<li>Abisuak: <strong>' + S.warns + '</strong></li></ul>' +
+    '<p style="color:#aab3c0">Post-mortema: zer gertatu zen, zergatik, eta nola saihestuko genukeen huringoan.</p>';
+  if (!renderer.xr.isPresenting) $('end').style.display = 'flex';
+}
+
+/* ---------- hautaketa: sagua / ukimena / VR ---------- */
+const ray = new THREE.Raycaster(); const ndc = new THREE.Vector2();
+const owner = o => { while (o && !(o.userData && o.userData.id)) o = o.parent; return o; };
+const visiblePick = () => pickables.filter(o => o.visible && o.parent && o.parent.visible !== false);
+function hitFromScreen(e) {
+  const r = renderer.domElement.getBoundingClientRect();
+  ndc.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
+  ray.setFromCamera(ndc, camera); return ray.intersectObjects(visiblePick(), true)[0];
+}
+let down = null, hovered = null;
+renderer.domElement.addEventListener('pointerdown', e => down = [e.clientX, e.clientY]);
+renderer.domElement.addEventListener('pointerup', e => {
+  if (!down || Math.hypot(e.clientX - down[0], e.clientY - down[1]) > 6) return;
+  const h = hitFromScreen(e); if (h) act(owner(h.object));
+});
+renderer.domElement.addEventListener('pointermove', e => {
+  if (e.pointerType !== 'mouse') return;
+  const h = hitFromScreen(e); setHover(h ? owner(h.object) : null);
+});
+function setHover(o) {
+  if (hovered === o) return;
+  if (hovered && hovered.material && hovered.material.emissive) hovered.material.emissive.setHex(hovered.userData.em ?? 0);
+  hovered = o; renderer.domElement.style.cursor = o ? 'pointer' : '';
+  if (o && o.material && o.material.emissive) { o.userData.em = o.userData.em ?? o.material.emissive.getHex(); o.material.emissive.setHex(0x334455); $('hov').textContent = o.userData.name || ''; }
+}
+
+const tmp = new THREE.Matrix4();
+for (let i = 0; i < 2; i++) {
+  const c = renderer.xr.getController(i);
+  const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3(0, 0, -4)]), new THREE.LineBasicMaterial({ color: 0x6aa9ec }));
+  c.add(line);
+  c.addEventListener('select', () => {
+    tmp.identity().extractRotation(c.matrixWorld);
+    ray.ray.origin.setFromMatrixPosition(c.matrixWorld);
+    ray.ray.direction.set(0, 0, -1).applyMatrix4(tmp);
+    const h = ray.intersectObjects(visiblePick(), true)[0];
+    if (h) act(owner(h.object));
+  });
+  scene.add(c);
+}
+renderer.xr.addEventListener('sessionstart', () => { controls.enabled = false; $('end').style.display = 'none'; });
+renderer.xr.addEventListener('sessionend', () => { controls.enabled = true; if (S.done) finish(); });
+
+/* ---------- botoiak ---------- */
+$('bReset').onclick = reset;
+$('bAgain').onclick = () => reset();
+$('bLabels').onclick = e => { const on = labels.length ? !labels[0].visible : true; labels.forEach(l => l.visible = on); e.target.textContent = 'Etiketak: ' + (on ? 'bai' : 'ez'); e.target.setAttribute('aria-pressed', on); };
+$('bHelp').onclick = () => setMsg('Helburua: ticket-a → tokena → komandoak → R1 → blade → LB → bezeroa → panela → ziurtagiria → LB → panela → post-mortema.', 'warn');
+
+addEventListener('resize', () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); });
+const clock = new THREE.Clock();
+renderer.setAnimationLoop(() => { navStep(Math.min(clock.getDelta(), .1)); controls.update(); renderer.render(scene, camera); });
+
+reset();
+window.__sim = { act: id => act(pickables.find(p => p.userData.id === id)), state: () => S };
+</script>
+</body>
+</html>
